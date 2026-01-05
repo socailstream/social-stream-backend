@@ -9,9 +9,7 @@ yarn.lock
 .env.*.local
 
 # Firebase Service Account Keys (SENSITIVE - NEVER COMMIT!)
-config/serviceAccountKey.json
-config/*.json
-*.json
+
 !package.json
 !package-lock.json
 

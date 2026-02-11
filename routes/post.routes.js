@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const postController = require('../controllers/post.controller');
 const { verifyToken } = require('../middleware/auth.middleware');
+const schedulerService = require('../services/scheduler.service');
 
 // All post routes require authentication
 router.use(verifyToken);
@@ -21,6 +22,63 @@ router.post('/:id/like', postController.likePost);
 
 // Publish to social media
 router.post('/publish', postController.publishToSocialMedia);
+
+// Debug endpoint to manually trigger scheduler check
+router.post('/debug/trigger-scheduler', async (req, res) => {
+  try {
+    console.log('\n🔧 [DEBUG] Manual scheduler trigger requested by user:', req.user._id);
+    await schedulerService.checkScheduledPosts();
+    res.status(200).json({
+      success: true,
+      message: 'Scheduler check triggered manually'
+    });
+  } catch (error) {
+    console.error('❌ [DEBUG] Error triggering scheduler:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error triggering scheduler',
+      error: error.message
+    });
+  }
+});
+
+// Debug endpoint to view all scheduled posts in database
+router.get('/debug/scheduled-posts', async (req, res) => {
+  try {
+    const Post = require('../models/Post.model');
+    const now = new Date();
+    
+    const allScheduledPosts = await Post.find({ status: 'scheduled' })
+      .populate('user', 'displayName email')
+      .sort({ scheduledDate: 1 });
+    
+    const readyToPost = await Post.find({
+      status: 'scheduled',
+      scheduledDate: { $lte: now }
+    }).populate('user', 'displayName email');
+    
+    res.status(200).json({
+      success: true,
+      currentTime: now.toISOString(),
+      currentTimeLocal: now.toLocaleString(),
+      allScheduledPosts: {
+        count: allScheduledPosts.length,
+        data: allScheduledPosts
+      },
+      readyToPost: {
+        count: readyToPost.length,
+        data: readyToPost
+      }
+    });
+  } catch (error) {
+    console.error('❌ [DEBUG] Error fetching scheduled posts:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching scheduled posts',
+      error: error.message
+    });
+  }
+});
 
 module.exports = router;
 

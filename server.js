@@ -1,3 +1,6 @@
+// Set timezone BEFORE loading any other modules
+process.env.TZ = process.env.TZ || 'Asia/Karachi';
+
 const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');

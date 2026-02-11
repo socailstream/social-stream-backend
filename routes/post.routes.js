@@ -57,13 +57,23 @@ router.get('/debug/scheduled-posts', async (req, res) => {
       scheduledDate: { $lte: now }
     }).populate('user', 'displayName email');
     
+    // Format posts with local time
+    const formattedPosts = allScheduledPosts.map(post => ({
+      ...post.toObject(),
+      scheduledDateISO: post.scheduledDate.toISOString(),
+      scheduledDateLocal: post.scheduledDate.toLocaleString(),
+      timeUntilScheduled: post.scheduledDate - now,
+      isReady: post.scheduledDate <= now
+    }));
+    
     res.status(200).json({
       success: true,
+      timezone: process.env.TZ || 'UTC',
       currentTime: now.toISOString(),
       currentTimeLocal: now.toLocaleString(),
       allScheduledPosts: {
         count: allScheduledPosts.length,
-        data: allScheduledPosts
+        data: formattedPosts
       },
       readyToPost: {
         count: readyToPost.length,

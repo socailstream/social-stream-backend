@@ -214,6 +214,7 @@ async function checkScheduledPosts() {
     const now = new Date();
     console.log(`\n📅 [SCHEDULER] Checking for scheduled posts at ${now.toISOString()}`);
     console.log(`📅 [SCHEDULER] Current time (local): ${now.toLocaleString()}`);
+    console.log(`📅 [SCHEDULER] Timezone: ${process.env.TZ || 'UTC'}`);
     
     // Find posts scheduled for now or earlier that are still pending
     const scheduledPosts = await Post.find({
@@ -227,7 +228,7 @@ async function checkScheduledPosts() {
     if (scheduledPosts.length > 0) {
       // Log details of each scheduled post
       scheduledPosts.forEach((post, index) => {
-        console.log(`📅 [SCHEDULER] Post ${index + 1}: ID=${post._id}, User=${post.user}, ScheduledDate=${post.scheduledDate.toISOString()}, Platforms=${post.platforms || post.platform}`);
+        console.log(`📅 [SCHEDULER] Post ${index + 1}: ID=${post._id}, User=${post.user}, ScheduledDate=${post.scheduledDate.toISOString()}, ScheduledDate(Local)=${post.scheduledDate.toLocaleString()}, Platforms=${post.platforms || post.platform}`);
       });
       
       // Process each post

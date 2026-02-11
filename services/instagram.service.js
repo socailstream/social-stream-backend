@@ -198,7 +198,48 @@ class InstagramService {
       const containerId = containerResponse.data.id;
       console.log('✅ Instagram: Media container created');
 
-      // Step 2: Publish the container
+      // Step 2: Wait for media processing (Instagram needs time to process the image)
+      let status = 'IN_PROGRESS';
+      let attempts = 0;
+      const maxAttempts = 20; // Photos process faster than videos
+
+      while (status === 'IN_PROGRESS' && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds between checks
+        
+        try {
+          const statusResponse = await axios.get(
+            `${GRAPH_API_BASE}/${containerId}`,
+            {
+              params: {
+                fields: 'status_code',
+                access_token: accessToken
+              }
+            }
+          );
+          
+          status = statusResponse.data.status_code;
+          console.log(`📊 Instagram: Media status check ${attempts + 1}/${maxAttempts}: ${status}`);
+          attempts++;
+        } catch (statusError) {
+          // If we can't check status, try to publish anyway after a brief wait
+          console.log(`⚠️ Instagram: Status check failed on attempt ${attempts + 1}, will retry...`);
+          attempts++;
+          if (attempts >= 3) {
+            // After 3 failed status checks, break and try publishing
+            break;
+          }
+        }
+      }
+
+      if (status === 'ERROR') {
+        throw new Error('Media processing failed with status: ERROR');
+      }
+
+      if (status === 'IN_PROGRESS' && attempts >= maxAttempts) {
+        console.log('⚠️ Instagram: Media still processing after max attempts, attempting publish anyway...');
+      }
+
+      // Step 3: Publish the container
       const publishResponse = await axios.post(
         `${GRAPH_API_BASE}/${igUserId}/media_publish`,
         null,
@@ -338,7 +379,45 @@ class InstagramService {
 
       console.log(`✅ Instagram: Created ${childContainerIds.length} carousel items`);
 
-      // Step 2: Create carousel container
+      // Step 2: Wait for all child media items to be processed
+      for (let i = 0; i < childContainerIds.length; i++) {
+        const containerId = childContainerIds[i];
+        let status = 'IN_PROGRESS';
+        let attempts = 0;
+        const maxAttempts = 20;
+
+        while (status === 'IN_PROGRESS' && attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds
+          
+          try {
+            const statusResponse = await axios.get(
+              `${GRAPH_API_BASE}/${containerId}`,
+              {
+                params: {
+                  fields: 'status_code',
+                  access_token: accessToken
+                }
+              }
+            );
+            
+            status = statusResponse.data.status_code;
+            console.log(`📊 Instagram: Carousel item ${i + 1}/${childContainerIds.length} status: ${status}`);
+            attempts++;
+          } catch (statusError) {
+            console.log(`⚠️ Instagram: Carousel item ${i + 1} status check failed, will retry...`);
+            attempts++;
+            if (attempts >= 3) {
+              break;
+            }
+          }
+        }
+
+        if (status === 'ERROR') {
+          throw new Error(`Carousel item ${i + 1} processing failed`);
+        }
+      }
+
+      // Step 3: Create carousel container
       const carouselResponse = await axios.post(
         `${GRAPH_API_BASE}/${igUserId}/media`,
         null,
@@ -353,8 +432,44 @@ class InstagramService {
       );
 
       const carouselId = carouselResponse.data.id;
+      console.log('✅ Instagram: Carousel container created');
 
-      // Step 3: Publish carousel
+      // Step 4: Wait for carousel container to be processed
+      let status = 'IN_PROGRESS';
+      let attempts = 0;
+      const maxAttempts = 20;
+
+      while (status === 'IN_PROGRESS' && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        try {
+          const statusResponse = await axios.get(
+            `${GRAPH_API_BASE}/${carouselId}`,
+            {
+              params: {
+                fields: 'status_code',
+                access_token: accessToken
+              }
+            }
+          );
+          
+          status = statusResponse.data.status_code;
+          console.log(`📊 Instagram: Carousel container status: ${status}`);
+          attempts++;
+        } catch (statusError) {
+          console.log('⚠️ Instagram: Carousel container status check failed, will retry...');
+          attempts++;
+          if (attempts >= 3) {
+            break;
+          }
+        }
+      }
+
+      if (status === 'ERROR') {
+        throw new Error('Carousel container processing failed');
+      }
+
+      // Step 5: Publish carousel
       const publishResponse = await axios.post(
         `${GRAPH_API_BASE}/${igUserId}/media_publish`,
         null,

@@ -17,6 +17,12 @@ const app = express();
 // Main async function to initialize server
 async function startServer() {
   try {
+    // Log timezone configuration
+    console.log(`\n🌍 Timezone Configuration:`);
+    console.log(`🌍 TZ Environment Variable: ${process.env.TZ || 'Not set (using UTC)'}`);
+    console.log(`🌍 Current Server Time: ${new Date().toISOString()}`);
+    console.log(`🌍 Current Server Time (Local): ${new Date().toLocaleString()}`);
+
     // Connect to MongoDB
     await connectDB();
 

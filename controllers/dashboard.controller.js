@@ -97,15 +97,20 @@ exports.getRecentActivity = async (req, res) => {
     })
       .sort({ createdAt: -1 })
       .limit(limit)
-      .select('content status createdAt platforms likesCount commentsCount sharesCount');
+      .select('content status createdAt platforms likesCount commentsCount sharesCount mediaUrls');
 
     recentPosts.forEach(post => {
+      // Get the first media URL if available
+      const mediaUrl = post.mediaUrls && post.mediaUrls.length > 0 ? post.mediaUrls[0] : null;
+      
       // Published post notification
       if (post.status === 'published') {
         activities.push({
           type: 'published',
           title: 'Post Published',
           description: post.content.substring(0, 60) + (post.content.length > 60 ? '...' : ''),
+          content: post.content,
+          mediaUrl: mediaUrl,
           time: post.createdAt,
           platforms: post.platforms || [],
           isUnread: false
@@ -117,6 +122,8 @@ exports.getRecentActivity = async (req, res) => {
             type: 'likes',
             title: 'New Likes',
             description: `Your post received ${post.likesCount} like${post.likesCount > 1 ? 's' : ''}`,
+            content: post.content,
+            mediaUrl: mediaUrl,
             time: post.createdAt,
             platforms: post.platforms || [],
             isUnread: post.likesCount > 10
@@ -128,6 +135,8 @@ exports.getRecentActivity = async (req, res) => {
             type: 'comment',
             title: 'New Comments',
             description: `Your post received ${post.commentsCount} comment${post.commentsCount > 1 ? 's' : ''}`,
+            content: post.content,
+            mediaUrl: mediaUrl,
             time: post.createdAt,
             platforms: post.platforms || [],
             isUnread: post.commentsCount > 5
@@ -139,6 +148,8 @@ exports.getRecentActivity = async (req, res) => {
             type: 'share',
             title: 'Post Shared',
             description: `Your post was shared ${post.sharesCount} time${post.sharesCount > 1 ? 's' : ''}`,
+            content: post.content,
+            mediaUrl: mediaUrl,
             time: post.createdAt,
             platforms: post.platforms || [],
             isUnread: false
@@ -151,6 +162,8 @@ exports.getRecentActivity = async (req, res) => {
           type: 'failed',
           title: 'Post Failed',
           description: `Failed to publish: ${post.content.substring(0, 50)}...`,
+          content: post.content,
+          mediaUrl: mediaUrl,
           time: post.createdAt,
           platforms: post.platforms || [],
           isUnread: true
@@ -166,13 +179,18 @@ exports.getRecentActivity = async (req, res) => {
     })
       .sort({ createdAt: -1 })
       .limit(5)
-      .select('content createdAt scheduledDate platforms');
+      .select('content createdAt scheduledDate platforms mediaUrls');
 
     scheduledPosts.forEach(post => {
+      // Get the first media URL if available
+      const scheduledMediaUrl = post.mediaUrls && post.mediaUrls.length > 0 ? post.mediaUrls[0] : null;
+      
       activities.push({
         type: 'scheduled',
         title: 'Post Scheduled',
         description: `Scheduled for ${new Date(post.scheduledDate).toLocaleString()}`,
+        content: post.content,
+        mediaUrl: scheduledMediaUrl,
         time: post.createdAt,
         platforms: post.platforms || [],
         isUnread: false

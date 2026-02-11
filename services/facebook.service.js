@@ -183,12 +183,11 @@ class FacebookService {
   async postToPage(pageAccessToken, pageId, content) {
     console.log('📘 Facebook: Preparing to post to page...', { pageId, content });
     console.log('📘 Facebook: Content type check - has photoUrl:', !!content.photoUrl, 'has message:', !!content.message, 'has link:', !!content.link);
+    
+    // DIAGNOSTIC: Check page settings before posting
+    await this.diagnosePageSettings(pageAccessToken, pageId);
+    
     try {
-      let endpoint = `${GRAPH_API_BASE}/${pageId}/feed`;
-      const params = {
-        access_token: pageAccessToken
-      };
-
       // Detect if the URL is a video based on file extension
       const isVideo = content.photoUrl && (
         content.photoUrl.toLowerCase().includes('.mp4') ||
@@ -199,58 +198,108 @@ class FacebookService {
 
       console.log('📘 Facebook: Media type detection - isVideo:', isVideo);
 
-      // Video post
+      // Video post - using two-step method for proper timeline publishing
       if (isVideo) {
-        console.log('📘 Facebook: Detected video, using videos endpoint');
-        endpoint = `${GRAPH_API_BASE}/${pageId}/videos`;
-        params.file_url = content.photoUrl;
-        if (content.message) {
-          params.description = content.message;
-        }
-        // DIAGNOSTIC: Add privacy parameter for video posts
-        params.privacy = JSON.stringify({ value: 'EVERYONE' });
-        console.log('📘 Facebook: Posting video to:', endpoint);
-        console.log('📘 Facebook: Video params:', { file_url: params.file_url, description: params.description, privacy: params.privacy });
+        console.log('📘 Facebook: Detected video, using two-step method');
+        
+        // Step 1: Upload video as unpublished
+        console.log('📘 Facebook: Step 1 - Uploading video as unpublished...');
+        const uploadResponse = await axios.post(`${GRAPH_API_BASE}/${pageId}/videos`, null, {
+          params: {
+            access_token: pageAccessToken,
+            file_url: content.photoUrl,
+            published: false,
+            description: content.message || ''
+          }
+        });
+        
+        const videoId = uploadResponse.data.id;
+        console.log('📘 Facebook: Video uploaded successfully, ID:', videoId);
+        
+        // Step 2: Create feed post with attached video
+        console.log('📘 Facebook: Step 2 - Creating feed post with attached video...');
+        const feedResponse = await axios.post(`${GRAPH_API_BASE}/${pageId}/feed`, null, {
+          params: {
+            access_token: pageAccessToken,
+            message: content.message || '',
+            attached_media: JSON.stringify([{ media_fbid: videoId }])
+          }
+        });
+        
+        console.log('✅ Facebook: Video post created successfully');
+        console.log('📘 Facebook: Response data:', JSON.stringify(feedResponse.data, null, 2));
+        
+        return {
+          success: true,
+          postId: feedResponse.data.id,
+          platform: 'facebook'
+        };
       }
-      // Photo post
+      // Photo post - using two-step method for proper timeline publishing
       else if (content.photoUrl) {
-        console.log('📘 Facebook: Detected photo, using photos endpoint');
-        endpoint = `${GRAPH_API_BASE}/${pageId}/photos`;
-        params.url = content.photoUrl;
-        if (content.message) {
-          params.caption = content.message;
-        }
-        // DIAGNOSTIC: Add privacy parameter for photo posts
-        params.privacy = JSON.stringify({ value: 'EVERYONE' });
-        console.log('📘 Facebook: Posting photo to:', endpoint);
-        console.log('📘 Facebook: Photo params:', { url: params.url, caption: params.caption, privacy: params.privacy });
+        console.log('📘 Facebook: Detected photo, using two-step method');
+        
+        // Step 1: Upload photo as unpublished
+        console.log('📘 Facebook: Step 1 - Uploading photo as unpublished...');
+        const uploadResponse = await axios.post(`${GRAPH_API_BASE}/${pageId}/photos`, null, {
+          params: {
+            access_token: pageAccessToken,
+            url: content.photoUrl,
+            published: false,
+            caption: content.message || ''
+          }
+        });
+        
+        const photoId = uploadResponse.data.id;
+        console.log('📘 Facebook: Photo uploaded successfully, ID:', photoId);
+        
+        // Step 2: Create feed post with attached photo
+        console.log('📘 Facebook: Step 2 - Creating feed post with attached photo...');
+        const feedResponse = await axios.post(`${GRAPH_API_BASE}/${pageId}/feed`, null, {
+          params: {
+            access_token: pageAccessToken,
+            message: content.message || '',
+            attached_media: JSON.stringify([{ media_fbid: photoId }])
+          }
+        });
+        
+        console.log('✅ Facebook: Photo post created successfully');
+        console.log('📘 Facebook: Response data:', JSON.stringify(feedResponse.data, null, 2));
+        
+        return {
+          success: true,
+          postId: feedResponse.data.id,
+          platform: 'facebook'
+        };
       }
       // Text post with optional link
       else {
         console.log('📘 Facebook: Detected text-only post, using feed endpoint');
+        const params = {
+          access_token: pageAccessToken
+        };
+        
         if (content.message) {
           params.message = content.message;
         }
         if (content.link) {
           params.link = content.link;
         }
-        // DIAGNOSTIC: Add privacy parameter for text posts (for comparison)
-        params.privacy = JSON.stringify({ value: 'EVERYONE' });
-        console.log('📘 Facebook: Text params:', { message: params.message, link: params.link, privacy: params.privacy });
+        
+        console.log('📘 Facebook: Text params:', { message: params.message, link: params.link });
+        console.log('📘 Facebook: Posting to page with endpoint:', `${GRAPH_API_BASE}/${pageId}/feed`);
+        
+        const response = await axios.post(`${GRAPH_API_BASE}/${pageId}/feed`, null, { params });
+
+        console.log('✅ Facebook: Text post created successfully');
+        console.log('📘 Facebook: Response data:', JSON.stringify(response.data, null, 2));
+        
+        return {
+          success: true,
+          postId: response.data.id,
+          platform: 'facebook'
+        };
       }
-
-      console.log('📘 Facebook: Posting to page with endpoint:', endpoint);
-      console.log('📘 Facebook: Full request params:', JSON.stringify(params, null, 2));
-      
-      const response = await axios.post(endpoint, null, { params });
-
-      console.log('✅ Facebook: Posted to page successfully');
-      console.log('📘 Facebook: Response data:', JSON.stringify(response.data, null, 2));
-      return {
-        success: true,
-        postId: response.data.id || response.data.post_id,
-        platform: 'facebook'
-      };
     } catch (error) {
       console.error('❌ Facebook: Post failed:', error.response?.data || error.message);
       console.error('📘 Facebook: Error details:', JSON.stringify(error.response?.data, null, 2));
@@ -341,18 +390,56 @@ class FacebookService {
     try {
       const response = await axios.get(`${GRAPH_API_BASE}/${pageId}/posts`, {
         params: {
-          fields: 'id,message,created_time,likes.summary(true),comments.summary(true),shares',
+          fields: 'id,message,created_time,likes.summary(true),comments.summary(true),shares,privacy',
           limit: limit,
           access_token: pageAccessToken
         }
       });
 
       console.log(`✅ Facebook: Found ${response.data.data?.length || 0} posts`);
+      
+      // DIAGNOSTIC: Log post privacy settings
+      if (response.data.data && response.data.data.length > 0) {
+        response.data.data.forEach((post, index) => {
+          console.log(`📘 Facebook: Post ${index + 1} - ID: ${post.id}, Privacy: ${JSON.stringify(post.privacy)}`);
+        });
+      }
+      
       return response.data.data || [];
     } catch (error) {
       console.error('❌ Facebook: Posts fetch failed:', error.response?.data || error.message);
       console.log('⚠️ Facebook: Returning empty posts array');
       return [];
+    }
+  }
+
+  /**
+   * DIAGNOSTIC: Check page settings and privacy
+   * @param {string} pageAccessToken - Page access token
+   * @param {string} pageId - Page ID
+   * @returns {Promise<Object>} - Page settings
+   */
+  async diagnosePageSettings(pageAccessToken, pageId) {
+    try {
+      console.log('📘 Facebook: DIAGNOSTIC - Checking page settings...');
+      
+      // Get page details
+      const pageResponse = await axios.get(`${GRAPH_API_BASE}/${pageId}`, {
+        params: {
+          fields: 'id,name,category,about,description,link,cover,picture.type(large),fan_count,followers_count,unpublished_content_type',
+          access_token: pageAccessToken
+        }
+      });
+      
+      console.log('📘 Facebook: DIAGNOSTIC - Page details:', JSON.stringify(pageResponse.data, null, 2));
+      
+      // Check if page is published
+      console.log('📘 Facebook: DIAGNOSTIC - Page is published:', pageResponse.data.unpublished_content_type === undefined);
+      
+      return pageResponse.data;
+    } catch (error) {
+      console.error('📘 Facebook: DIAGNOSTIC - Page settings check failed:', error.response?.data || error.message);
+      return null;
     }
   }
 
@@ -370,8 +457,16 @@ class FacebookService {
         }
       });
 
+      // DIAGNOSTIC: Log token debug information
+      console.log('📘 Facebook: Token debug info:', JSON.stringify(response.data.data, null, 2));
+      console.log('📘 Facebook: Token is_valid:', response.data.data?.is_valid);
+      console.log('📘 Facebook: Token scopes:', response.data.data?.scopes);
+      console.log('📘 Facebook: Token expires_at:', response.data.data?.expires_at);
+      console.log('📘 Facebook: Token granular_scopes:', JSON.stringify(response.data.data?.granular_scopes, null, 2));
+
       return response.data.data?.is_valid === true;
     } catch (error) {
+      console.error('📘 Facebook: Token validation failed:', error.response?.data || error.message);
       return false;
     }
   }

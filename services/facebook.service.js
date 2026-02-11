@@ -144,7 +144,7 @@ class FacebookService {
 
       console.log(`✅ Facebook: Found ${response.data.data?.length || 0} pages`);
       
-      return (response.data.data || []).map(page => ({
+      const pages = (response.data.data || []).map(page => ({
         pageId: page.id,
         pageName: page.name,
         pageAccessToken: page.access_token,
@@ -154,6 +154,19 @@ class FacebookService {
         picture: page.picture?.data?.url,
         fanCount: page.fan_count
       }));
+
+      // DIAGNOSTIC: Log detailed page information including permissions
+      pages.forEach((page, index) => {
+        console.log(`📘 Facebook: Page ${index + 1} - Name: ${page.pageName}, ID: ${page.pageId}`);
+        console.log(`📘 Facebook:   Tasks/Permissions: ${JSON.stringify(page.tasks)}`);
+        console.log(`📘 Facebook:   Has CREATE_CONTENT: ${page.tasks?.includes('CREATE_CONTENT')}`);
+        console.log(`📘 Facebook:   Has MANAGE_CONTENT: ${page.tasks?.includes('MANAGE_CONTENT')}`);
+        console.log(`📘 Facebook:   Has MODERATE: ${page.tasks?.includes('MODERATE')}`);
+        console.log(`📘 Facebook:   Has ADS_MANAGEMENT: ${page.tasks?.includes('ADS_MANAGEMENT')}`);
+        console.log(`📘 Facebook:   Has ANALYZE: ${page.tasks?.includes('ANALYZE')}`);
+      });
+
+      return pages;
     } catch (error) {
       console.error('❌ Facebook: Pages fetch failed:', error.response?.data || error.message);
       throw new Error('Failed to fetch Facebook pages');
@@ -169,6 +182,7 @@ class FacebookService {
    */
   async postToPage(pageAccessToken, pageId, content) {
     console.log('📘 Facebook: Preparing to post to page...', { pageId, content });
+    console.log('📘 Facebook: Content type check - has photoUrl:', !!content.photoUrl, 'has message:', !!content.message, 'has link:', !!content.link);
     try {
       let endpoint = `${GRAPH_API_BASE}/${pageId}/feed`;
       const params = {
@@ -183,6 +197,8 @@ class FacebookService {
         content.photoUrl.toLowerCase().includes('video')
       );
 
+      console.log('📘 Facebook: Media type detection - isVideo:', isVideo);
+
       // Video post
       if (isVideo) {
         console.log('📘 Facebook: Detected video, using videos endpoint');
@@ -191,7 +207,10 @@ class FacebookService {
         if (content.message) {
           params.description = content.message;
         }
+        // DIAGNOSTIC: Add privacy parameter for video posts
+        params.privacy = JSON.stringify({ value: 'EVERYONE' });
         console.log('📘 Facebook: Posting video to:', endpoint);
+        console.log('📘 Facebook: Video params:', { file_url: params.file_url, description: params.description, privacy: params.privacy });
       }
       // Photo post
       else if (content.photoUrl) {
@@ -201,21 +220,32 @@ class FacebookService {
         if (content.message) {
           params.caption = content.message;
         }
+        // DIAGNOSTIC: Add privacy parameter for photo posts
+        params.privacy = JSON.stringify({ value: 'EVERYONE' });
+        console.log('📘 Facebook: Posting photo to:', endpoint);
+        console.log('📘 Facebook: Photo params:', { url: params.url, caption: params.caption, privacy: params.privacy });
       }
       // Text post with optional link
       else {
+        console.log('📘 Facebook: Detected text-only post, using feed endpoint');
         if (content.message) {
           params.message = content.message;
         }
         if (content.link) {
           params.link = content.link;
         }
+        // DIAGNOSTIC: Add privacy parameter for text posts (for comparison)
+        params.privacy = JSON.stringify({ value: 'EVERYONE' });
+        console.log('📘 Facebook: Text params:', { message: params.message, link: params.link, privacy: params.privacy });
       }
 
       console.log('📘 Facebook: Posting to page with endpoint:', endpoint);
+      console.log('📘 Facebook: Full request params:', JSON.stringify(params, null, 2));
+      
       const response = await axios.post(endpoint, null, { params });
 
       console.log('✅ Facebook: Posted to page successfully');
+      console.log('📘 Facebook: Response data:', JSON.stringify(response.data, null, 2));
       return {
         success: true,
         postId: response.data.id || response.data.post_id,
@@ -223,6 +253,7 @@ class FacebookService {
       };
     } catch (error) {
       console.error('❌ Facebook: Post failed:', error.response?.data || error.message);
+      console.error('📘 Facebook: Error details:', JSON.stringify(error.response?.data, null, 2));
       throw new Error(error.response?.data?.error?.message || 'Failed to post to Facebook');
     }
   }
